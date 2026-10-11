@@ -1,0 +1,36 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "mobile-use-codex",
+  "version": "0.2.0",
+  "description": "Control mobile devices with bundled mobile-mcp tools and watch them in a Codex MCP Apps panel.",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Mobile Use for Codex",
+        "shortDescription": "操作移动设备，并实时查看设备画面",
+        "longDescription": "Control connected iOS and Android devices with bundled mobile-mcp tools. Launch apps, tap, swipe and type while viewing live device screens in the Codex side panel. Capture is shared per device and stops when device work ends.",
+        "category": "Developer Tools",
+        "logo": "./assets/logo.png",
+        "composerIcon": "./assets/composer-icon.svg",
+        "composerIconDark": "./assets/composer-icon-dark.svg",
+        "defaultPrompt": [
+          "Show my connected devices and open a live monitor.",
+          "在 iPad 拼多多搜索 iqoo 手机，同时显示实时画面。"
+        ],
+        "developerName": "dva2019ksy",
+        "capabilities": ["Control mobile devices", "View live device screens"],
+        "brandColor": "#0C3FB8",
+        "brandColorDark": "#19D9CF",
+        "websiteURL": "https://github.com/dva2019ksy/mobile-use-codex",
+        "supportURL": "https://github.com/dva2019ksy/mobile-use-codex/issues"
+      }
+    }
+  },
+  "author": {
+    "name": "dva2019ksy",
+    "email": "dva2019ksy@gmail.com",
+    "url": "https://github.com/dva2019ksy"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/dva2019ksy/mobile-use-codex"
+}

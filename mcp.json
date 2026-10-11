@@ -1,0 +1,21 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "mobile-use-codex": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/scripts/launch.mjs", "monitor"],
+      "env": {
+        "MOBILEMCP_DISABLE_TELEMETRY": "1"
+      }
+    },
+    "mobile-control": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/scripts/launch.mjs", "control"],
+      "env": {
+        "MOBILEMCP_DISABLE_TELEMETRY": "1"
+      }
+    }
+  }
+}

@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mobile Use for Codex</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #fafafa;
+      --fg: #242424;
+      --line: #e3e3e3;
+      --muted: #737373;
+      --btn: #eee;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #202020;
+        --fg: #eee;
+        --line: #393939;
+        --muted: #aaa;
+        --btn: #303030;
+      }
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font: 12px system-ui;
+    }
+    header {
+      min-height: 46px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    strong {
+      font-size: 13px;
+      font-weight: 600;
+    }
+    #status {
+      color: var(--muted);
+      flex: 1;
+    }
+    .dot {
+      height: 6px;
+      width: 6px;
+      background: #888;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    button {
+      background: var(--btn);
+      color: inherit;
+      border: 0;
+      border-radius: 6px;
+      padding: 6px 9px;
+      cursor: pointer;
+      font: inherit;
+      white-space: nowrap;
+    }
+    button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+    main {
+      height: calc(100dvh - 46px);
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      overflow: hidden;
+    }
+    body[data-mode='inline'] main {
+      height: 320px;
+    }
+    #status {
+      font-size: 11px;
+    }
+    header {
+      flex-wrap: wrap;
+    }
+    img {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 5px;
+    }
+    #empty {
+      color: var(--muted);
+      padding: 24px;
+      text-align: center;
+    }
+  </style>
+  <body data-mode="inline">
+    <header>
+      <i class="dot" id="dot"></i>
+      <strong id="device">Mobile Use for Codex</strong>
+      <span id="status">正在连接 Codex…</span>
+      <button id="expand" disabled>在侧栏打开</button>
+      <button id="toggle" disabled>暂停</button>
+    </header>
+    <main id="view"><div id="empty">等待设备监看工具返回。</div></main>
+    <script>
+      /* STANDALONE_CONFIG */
+      const $ = (selector) => document.querySelector(selector);
+      const viewer =
+        window.crypto?.randomUUID?.() ??
+        'viewer-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      const pending = new Map();
+      let config = null;
+      let running = false;
+      let image = null;
+      let polling = false;
+      let rpcId = 0;
+      let bridgeReady = false;
+      let generation = 0;
+      let autoExpanded = false;
+      let rendered = [];
+      function setStatus(text, color = '#888') {
+        $('#status').textContent = text;
+        $('#dot').style.background = color;
+      }
+      function notify(method, params) {
+        parent.postMessage({ jsonrpc: '2.0', method, params }, '*');
+      }
+      function rpc(method, params) {
+        return new Promise((resolve, reject) => {
+          const id = ++rpcId;
+          const timer = setTimeout(() => {
+            pending.delete(id);
+            reject(Error('Codex bridge timeout'));
+          }, 10000);
+          pending.set(id, { resolve, reject, timer });
+          parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
+        });
+      }
+      function applyMode(mode) {
+        if (!['inline', 'fullscreen'].includes(mode)) {
+          return;
+        }
+        document.body.dataset.mode = mode;
+        $('#expand').textContent = mode === 'fullscreen' ? '收回' : '在侧栏打开';
+      }
+      async function displayMode(mode) {
+        const response = window.openai?.requestDisplayMode
+          ? await window.openai.requestDisplayMode({ mode })
+          : await rpc('ui/request-display-mode', { mode });
+        applyMode(response?.mode ?? window.openai?.displayMode);
+      }
+      function tryAutoExpand() {
+        if (!bridgeReady || !config || autoExpanded) {
+          return;
+        }
+        autoExpanded = true;
+        if (document.body.dataset.mode === 'fullscreen') {
+          return;
+        }
+        displayMode('fullscreen').catch((error) => {
+          $('#expand').title = '自动打开侧栏失败：' + error.message;
+        });
+      }
+      function stopImage() {
+        if (!image) {
+          return;
+        }
+        image.onerror = null;
+        image.src =
+          'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        image.remove();
+        image = null;
+      }
+      async function releaseViewer() {
+        if (bridgeReady && config) {
+          try {
+            await rpc('tools/call', {
+              name: 'release_frame_viewer',
+              arguments: { device: config.device.id, viewer },
+            });
+          } catch {
+            /* The server also expires abandoned viewers automatically. */
+          }
+        }
+      }
+      function stopViewing() {
+        running = false;
+        generation++;
+        stopImage();
+        void releaseViewer();
+      }
+      function fail(error) {
+        stopViewing();
+        setStatus(error.message, '#c17b27');
+        $('#toggle').textContent = '重连';
+      }
+      function showRate(capture) {
+        const now = performance.now();
+        rendered.push(now);
+        while (rendered.length > 120 || (rendered.length > 1 && rendered[0] < now - 2000)) {
+          rendered.shift();
+        }
+        const fps = rendered.length > 1 ? ((rendered.length - 1) * 1000) / (now - rendered[0]) : 0;
+        setStatus('采集 ' + capture.toFixed(1) + ' · 显示 ' + fps.toFixed(1) + ' fps', '#32a46c');
+      }
+      async function streamFrames(current) {
+        let after = 0;
+        while (running && generation === current) {
+          try {
+            const result = await rpc('tools/call', {
+              name: 'read_frame',
+              arguments: { device: config.device.id, viewer, after, waitMs: 1000 },
+            });
+            if (!running || generation !== current) {
+              return;
+            }
+            if (result.isError) {
+              throw Error(result.content?.find((c) => c.type === 'text')?.text || '画面读取失败');
+            }
+            const state = result.structuredContent;
+            if (state?.error) {
+              throw Error(state.error);
+            }
+            const frame = result._meta?.mobileCodexFrame;
+            if (state?.activeOperations === 0) {
+              if (frame) {
+                image.src = 'data:image/jpeg;base64,' + frame.jpeg;
+                await image.decode();
+                after = frame.sequence;
+              }
+              rendered = [];
+              setStatus('操作已结束 · 采集已停止');
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+              continue;
+            }
+            if (!frame) {
+              setStatus('等待设备画面…', '#c17b27');
+              continue;
+            }
+            image.src = 'data:image/jpeg;base64,' + frame.jpeg;
+            await image.decode();
+            if (!running || generation !== current) {
+              return;
+            }
+            after = frame.sequence;
+            showRate(state?.fps ?? 0);
+          } catch (error) {
+            if (running && generation === current) {
+              fail(error);
+            }
+            return;
+          }
+        }
+      }
+      function start() {
+        if (!config || (!bridgeReady && !window.mobileCodexStandalone)) {
+          return;
+        }
+        running = true;
+        const current = ++generation;
+        rendered = [];
+        $('#toggle').textContent = '暂停';
+        stopImage();
+        image = new Image();
+        image.alt = config.device.name + ' 实时屏幕';
+        $('#empty')?.remove();
+        $('#view').append(image);
+        setStatus('正在接收画面…', '#c17b27');
+        if (window.mobileCodexStandalone) {
+          image.onerror = () => fail(Error('画面连接中断，请重连'));
+          image.src = config.streamUrl + '?t=' + Date.now();
+        } else {
+          void streamFrames(current);
+          tryAutoExpand();
+        }
+      }
+      function mount(result) {
+        const next = result?._meta?.mobileCodex;
+        if (!next) {
+          return;
+        }
+        stopViewing();
+        config = next;
+        $('#device').textContent = config.device.name;
+        $('#toggle').disabled = false;
+        $('#expand').disabled = !bridgeReady;
+        start();
+      }
+      addEventListener('message', (event) => {
+        if (event.source !== parent) {
+          return;
+        }
+        const message = event.data;
+        if (!message || message.jsonrpc !== '2.0') {
+          return;
+        }
+        if (message.id !== undefined && pending.has(message.id)) {
+          const request = pending.get(message.id);
+          clearTimeout(request.timer);
+          pending.delete(message.id);
+          message.error
+            ? request.reject(Error(message.error.message))
+            : request.resolve(message.result);
+          return;
+        }
+        if (message.method === 'ui/notifications/tool-result') {
+          mount(message.params);
+        }
+        if (message.method === 'ui/notifications/host-context-changed') {
+          applyMode(message.params?.displayMode);
+        }
+        if (message.method === 'ui/resource-teardown') {
+          stopViewing();
+          parent.postMessage({ jsonrpc: '2.0', id: message.id, result: {} }, '*');
+        }
+      });
+      addEventListener('openai:set_globals', (event) =>
+        applyMode(event.detail?.globals?.displayMode),
+      );
+      $('#toggle').onclick = () => {
+        if (running) {
+          stopViewing();
+          $('#toggle').textContent = '继续';
+          setStatus('已暂停');
+        } else {
+          start();
+        }
+      };
+      $('#expand').onclick = () =>
+        displayMode(document.body.dataset.mode === 'fullscreen' ? 'inline' : 'fullscreen').catch(
+          (error) => setStatus('当前客户端未允许展开：' + error.message, '#c17b27'),
+        );
+      setInterval(async () => {
+        if (!window.mobileCodexStandalone || !config || !running || polling) {
+          return;
+        }
+        polling = true;
+        try {
+          const response = await fetch(config.statusUrl, { cache: 'no-store' });
+          if (!response.ok) {
+            throw Error('监看会话已结束');
+          }
+          const state = await response.json();
+          if (!running) {
+            return;
+          }
+          if (state.error) {
+            throw Error(state.error);
+          }
+          if (state.activeOperations === 0) {
+            setStatus('操作已结束 · 采集已停止');
+            return;
+          }
+          setStatus(
+            state.ageMs === null ? '等待设备画面…' : '采集 ' + state.fps.toFixed(1) + ' fps',
+            state.ageMs < 3000 ? '#32a46c' : '#c17b27',
+          );
+        } catch (error) {
+          fail(error);
+        } finally {
+          polling = false;
+        }
+      }, 1000);
+      (async () => {
+        if (window.mobileCodexStandalone) {
+          mount({ _meta: { mobileCodex: window.mobileCodexStandalone } });
+          return;
+        }
+        try {
+          const initialized = await rpc('ui/initialize', {
+            appInfo: { name: 'mobile-use-codex', version: '__PLUGIN_VERSION__' },
+            appCapabilities: {},
+            protocolVersion: '2026-01-26',
+          });
+          bridgeReady = true;
+          applyMode(initialized?.hostContext?.displayMode);
+          notify('ui/notifications/initialized', {});
+          $('#expand').disabled = !config;
+          if (config) {
+            start();
+          } else {
+            setStatus('Codex 已连接 · 等待设备');
+          }
+        } catch (error) {
+          setStatus('Widget 桥接失败：' + error.message, '#c17b27');
+        }
+      })();
+    </script>
+  </body>
+</html>
