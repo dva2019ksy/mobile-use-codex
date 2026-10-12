@@ -1,6 +1,6 @@
 {
   "name": "mobile-use-codex",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,8 @@
     "format:check": "prettier . --check",
     "check": "npm run lint && npm run format:check && npm test",
     "smoke": "node scripts/smoke.mjs",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "test:codex-tools": "node scripts/verify-codex-tools.mjs"
   },
   "engines": {
     "node": "^22.13.0 || >=24.0.0"

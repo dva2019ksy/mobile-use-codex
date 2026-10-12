@@ -35,6 +35,7 @@ codex plugin add mobile-use-codex@mobile-use --json
 npm ci --ignore-scripts
 npm run format
 npm run check
+CODEX_CLI='/absolute/path/to/codex' npm run test:codex-tools
 npm run package
 ```
 

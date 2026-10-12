@@ -6,7 +6,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const mode = process.argv[2];
 const entries = {
   monitor: 'server/index.mjs',
-  control: 'node_modules/@mobilenext/mobile-mcp/lib/index.js',
+  control: 'server/control.mjs',
 };
 
 try {
@@ -16,7 +16,7 @@ try {
   await ensureDependencies({ root });
   const entry = join(root, entries[mode]);
   // Load in this process so shutdown signals and stdin reach the actual MCP service.
-  process.argv = [process.execPath, entry, ...(mode === 'control' ? ['--stdio'] : [])];
+  process.argv = [process.execPath, entry];
   await import(pathToFileURL(entry).href);
 } catch (error) {
   console.error(`[mobile-use-codex] ${error.message}`);

@@ -11,6 +11,10 @@
 
 两个服务通过 `scripts/launch.mjs` 启动，首次使用时按 lockfile 安装运行依赖。安装锁防止两个服务同时安装，安装日志写入 stderr，不混入 MCP 协议。操作工具保留上游参数、注解与截图结果；skill 在设备任务外围协调监看租约。
 
+`mobile-control` 通过 `server/control.mjs` 启动上游 server factory。`server/control-transport.mjs` 只在与 `initialize` 请求对应的响应中移除可选字段 `instructions`；全部工具名称、描述、参数说明、约束、注解和结果原样透传。设备选择、远程设备费用与释放、元素读取、批处理和 URL 限制等公共流程集中维护在插件自带的 `skills/mobile-monitor/SKILL.md`。
+
+Codex 会把服务公共说明重复加入每个工具的模型描述。保留完整上游工具定义、仅移除这部分重复附加后，两个服务在同一插件内可完整暴露。客户端内部裁剪阈值尚未确认；本插件不以字符数门槛判断正确性，而以真实客户端工具可用性回归验证。契约测试直接比较完整上游目录，并记录上游公共说明的摘要；升级依赖导致公共规则变化时，需重新检查 skill 中迁移的规则。
+
 ```text
 Codex → mobile-control → mobile-mcp → mobilecli → 设备操作
 Codex → mobile-use-codex → 共享采集服务 → mobilecli → JPEG 帧
@@ -55,3 +59,11 @@ npm run smoke -- --device '<实际在线设备 ID>'
 ```
 
 `scripts/smoke.mjs` 验证内置控制服务的设备与页面读取、连续画面传输，以及操作结束后的停止采集；不改变设备页面、不保存画面，也不验证客户端 UI 渲染。
+
+客户端工具暴露回归验证：
+
+```sh
+CODEX_CLI='/absolute/path/to/codex' npm run test:codex-tools
+```
+
+该验证要求已安装支持 code mode 的 Codex CLI 和本机模型目录缓存。可通过 `CODEX_MODEL`、`CODEX_MODELS_CACHE` 指定匹配的模型与缓存文件。脚本将当前插件复制到临时的插件安装目录，使用独立 Codex 配置和本地 Responses 模拟服务，确认模型运行时能调用全部 33 个操作工具和 7 个监控工具；只检查目录，不调用真实模型或操作设备，也不修改用户配置。仅检查 MCP `tools/list` 的数量无法覆盖此类回归。

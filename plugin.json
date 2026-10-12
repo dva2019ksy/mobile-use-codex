@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "mobile-use-codex",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Control mobile devices with bundled mobile-mcp tools and watch them in a Codex MCP Apps panel.",
   "extensions": {
     "com.openai": {
