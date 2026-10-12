@@ -44,7 +44,6 @@
     "scripts",
     "package-lock.json",
     "README.md",
-    "docs",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
     ".editorconfig",

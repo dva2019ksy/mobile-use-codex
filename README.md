@@ -41,8 +41,6 @@ npm run package
 
 `dist/` 输出 ZIP 和 SHA-256 校验文件，不包含依赖和用户数据。打包需要系统提供 `zip` 命令。真机只读验证：`npm run smoke -- --device '<实际在线设备 ID>'`。
 
-架构见 [docs/architecture.md](docs/architecture.md)，GitHub 分发见 [docs/releasing.md](docs/releasing.md)。
-
 ## 许可证
 
 MIT · dva2019ksy。上游依赖见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。本项目由第三方开发。
