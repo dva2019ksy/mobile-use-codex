@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { connectBroker } from './broker-client.mjs';
@@ -11,7 +12,6 @@ const { Mobilecli } = require('@mobilenext/mobile-mcp/lib/mobilecli.js');
 const { version: VERSION } = JSON.parse(
   await readFile(new URL('../package.json', import.meta.url), 'utf8'),
 );
-const UI_URI = `ui://mobile-use-codex/monitor-${VERSION}.html`;
 const MIME = 'text/html;profile=mcp-app';
 
 export async function createMobileCodex({
@@ -21,6 +21,8 @@ export async function createMobileCodex({
   const template = (
     await readFile(new URL('../ui/monitor.html', import.meta.url), 'utf8')
   ).replaceAll('__PLUGIN_VERSION__', VERSION);
+  const revision = createHash('sha256').update(template).digest('hex').slice(0, 12);
+  const UI_URI = `ui://mobile-use-codex/monitor-${VERSION}-${revision}.html`;
   const broker = await connectBroker({ cli, template, runtimeDir });
   const origin = broker.origin;
   const listDevices = () => broker.call('listDevices');
@@ -50,7 +52,7 @@ export async function createMobileCodex({
     { name: 'mobile-use-codex', version: VERSION },
     {
       instructions:
-        "List devices before choosing a device ID. Open a monitor once before device work and reuse it. These monitor tools are read-only; use the mobile_* tools from this plugin's bundled mobile-control server for device interaction. No separately configured mobile-mcp server is needed. open_monitor begins an operation lease; renew within 90s while working, and always end_operation in cleanup when work finishes, fails or waits for user input. Viewers do not keep capture active. Tool success does not prove the widget rendered.",
+        "List devices before choosing a device ID. Open a monitor once before device work and reuse it. Model-facing monitor tools are read-only; use the mobile_* tools from this plugin's bundled mobile-control server for device interaction. No separately configured mobile-mcp server is needed. open_monitor begins an operation lease; renew within 90s while working, and always end_operation in cleanup when work finishes, fails or waits for user input. Viewers do not keep capture active. Tool success does not prove the widget rendered.",
     },
   );
   server.registerResource('mobile-monitor', UI_URI, { mimeType: MIME }, async () => ({
@@ -193,6 +195,7 @@ export async function createMobileCodex({
         'Read capture state and the number of active operations without starting capture.',
       inputSchema: z.object({ device: z.string().min(1) }),
       annotations: { readOnlyHint: true, openWorldHint: false },
+      _meta: { ui: { visibility: ['model', 'app'] }, 'openai/widgetAccessible': true },
     },
     safe(async (args) => {
       const state = await broker.call('monitorStatus', args);
@@ -201,6 +204,27 @@ export async function createMobileCodex({
   );
 
   const widgetOnly = { ui: { visibility: ['app'] }, 'openai/widgetAccessible': true };
+  server.registerTool(
+    'press_monitor_button',
+    {
+      title: 'Press monitor device button',
+      description:
+        'Widget-only Home and volume controls for this connection’s active device operation. Does not begin or renew a capture lease.',
+      inputSchema: z.object({
+        device: z.string().min(1),
+        button: z.enum(['HOME', 'VOLUME_UP', 'VOLUME_DOWN']),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: widgetOnly,
+    },
+    safe(async (args) => {
+      const state = await broker.call('pressMonitorButton', args);
+      return {
+        content: [{ type: 'text', text: `Pressed ${state.button}.` }],
+        structuredContent: state,
+      };
+    }),
+  );
   server.registerTool(
     'read_frame',
     {

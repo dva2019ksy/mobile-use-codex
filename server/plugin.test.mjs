@@ -58,7 +58,8 @@ else { console.error('Unexpected command'); process.exit(1); }
     const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
     assert.equal(monitor.initialized.serverInfo.version, pkg.version);
     const resource = (await monitor.request('resources/list', {})).resources[0];
-    assert.equal(resource.uri, `ui://mobile-use-codex/monitor-${pkg.version}.html`);
+    assert(resource.uri.startsWith(`ui://mobile-use-codex/monitor-${pkg.version}-`));
+    assert.match(resource.uri, /[0-9a-f]{12}\.html$/);
     const page = (await monitor.request('resources/read', { uri: resource.uri })).contents[0].text;
     assert(page.includes(`version: '${pkg.version}'`));
     assert(!page.includes('__PLUGIN_VERSION__'));
@@ -89,6 +90,27 @@ else { console.error('Unexpected command'); process.exit(1); }
     const opened = await monitor.call('open_monitor', { device: device.id });
     assert(!opened.isError, JSON.stringify(opened));
     operation = opened.structuredContent.operation;
+    const monitorTools = (await monitor.request('tools/list', {})).tools;
+    const buttons = monitorTools.find((tool) => tool.name === 'press_monitor_button');
+    assert.equal(buttons.annotations.readOnlyHint, false);
+    assert.deepEqual(buttons._meta.ui.visibility, ['app']);
+    assert.equal(
+      monitorTools.find((tool) => tool.name === 'monitor_status')._meta['openai/widgetAccessible'],
+      true,
+      'paused widgets must be allowed to check lifecycle status',
+    );
+    for (const button of ['HOME', 'VOLUME_UP', 'VOLUME_DOWN']) {
+      assert(!(await monitor.call('press_monitor_button', { device: device.id, button })).isError);
+    }
+    assert(
+      (await monitor.call('press_monitor_button', { device: device.id, button: 'POWER' })).isError,
+    );
+    const observer = await startMcp('mobile-use-codex', { env, cwd: dir });
+    clients.push(observer);
+    assert(
+      (await observer.call('press_monitor_button', { device: device.id, button: 'HOME' })).isError,
+      'another connection cannot control the device using this owner’s lease',
+    );
     const frame = await monitor.call('read_frame', {
       device: device.id,
       viewer: 'plugin-test-viewer',
@@ -124,6 +146,10 @@ else { console.error('Unexpected command'); process.exit(1); }
     assert.equal(ended.structuredContent.state, 'idle');
     assert.equal(ended.structuredContent.activeOperations, 0);
     assert.equal(ended.structuredContent.viewers, 1);
+    assert(
+      (await monitor.call('press_monitor_button', { device: device.id, button: 'HOME' })).isError,
+      'controls must not revive an ended operation',
+    );
     const calls = (await readFile(commands, 'utf8')).trim().split('\n').map(JSON.parse);
     assert(calls.some((args) => args.join(' ') === `apps launch test.app --device ${device.id}`));
     assert(calls.some((args) => args.join(' ') === `io tap @e1 --device ${device.id}`));
@@ -131,6 +157,13 @@ else { console.error('Unexpected command'); process.exit(1); }
       calls.some((args) => args.join(' ') === `io swipe 500,800,500,600 --device ${device.id}`),
     );
     assert(calls.some((args) => args.join(' ') === `io text test --device ${device.id}`));
+    for (const button of ['HOME', 'VOLUME_UP', 'VOLUME_DOWN']) {
+      assert.equal(
+        calls.filter((args) => args.join(' ') === `io button ${button} --device ${device.id}`)
+          .length,
+        1,
+      );
+    }
     assert.equal(calls.filter((args) => args[0] === 'screencapture').length, 1);
     const smoke = await run(
       process.execPath,

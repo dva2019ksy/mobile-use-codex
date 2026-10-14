@@ -2,111 +2,454 @@
 <html lang="zh-CN">
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Mobile Use for Codex</title>
+  <title>Mobile Monitor</title>
   <style>
     :root {
       color-scheme: light dark;
-      --bg: #fafafa;
-      --fg: #242424;
-      --line: #e3e3e3;
-      --muted: #737373;
-      --btn: #eee;
+      --bg: #f3f4f6;
+      --fg: #22252a;
+      --muted: #6c717b;
+      --glass: rgb(255 255 255 / 66%);
+      --edge: rgb(255 255 255 / 90%);
+      --line: rgb(35 43 55 / 10%);
+      --hover: rgb(35 43 55 / 7%);
+      --accent: #227b57;
+      --shadow: 0 12px 36px rgb(30 40 60 / 10%), inset 0 1px 0 rgb(255 255 255 / 70%);
+      --screen-shadow: 0 24px 64px rgb(30 40 60 / 16%), 0 2px 8px rgb(30 40 60 / 8%);
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #202020;
-        --fg: #eee;
-        --line: #393939;
-        --muted: #aaa;
-        --btn: #303030;
+        --bg: #17181b;
+        --fg: #f1f2f4;
+        --muted: #9c9fa9;
+        --glass: rgb(47 49 55 / 64%);
+        --edge: rgb(255 255 255 / 15%);
+        --line: rgb(255 255 255 / 10%);
+        --hover: rgb(255 255 255 / 9%);
+        --accent: #80d8ac;
+        --shadow: 0 12px 36px rgb(0 0 0 / 22%), inset 0 1px 0 rgb(255 255 255 / 9%);
+        --screen-shadow: 0 24px 64px rgb(0 0 0 / 35%), 0 2px 8px rgb(0 0 0 / 20%);
       }
     }
     * {
       box-sizing: border-box;
     }
+    [hidden] {
+      display: none !important;
+    }
     body {
       margin: 0;
-      background: var(--bg);
+      height: 100dvh;
+      min-height: 300px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      overflow: hidden;
       color: var(--fg);
-      font: 12px system-ui;
+      background:
+        radial-gradient(ellipse at 15% 5%, rgb(151 171 205 / 9%), transparent 55%),
+        radial-gradient(ellipse at 90% 90%, rgb(160 190 184 / 7%), transparent 50%), var(--bg);
+      font:
+        12px -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    body[data-mode='inline'] {
+      height: 440px;
     }
     header {
-      min-height: 46px;
       display: flex;
       align-items: center;
-      gap: 9px;
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--line);
+      gap: 10px;
+      padding: 20px 24px 12px;
+      min-width: 0;
     }
-    strong {
-      font-size: 13px;
-      font-weight: 600;
-    }
-    #status {
-      color: var(--muted);
-      flex: 1;
-    }
-    .dot {
-      height: 6px;
-      width: 6px;
-      background: #888;
-      border-radius: 50%;
+    .device-icon {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--edge);
+      border-radius: 12px;
+      background: var(--glass);
       flex-shrink: 0;
     }
-    button {
-      background: var(--btn);
-      color: inherit;
-      border: 0;
-      border-radius: 6px;
-      padding: 6px 9px;
-      cursor: pointer;
-      font: inherit;
+    .identity {
+      min-width: 0;
+      flex: 1;
+    }
+    .eyebrow {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 1.4px;
+    }
+    #device {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .connection {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 11px;
       white-space: nowrap;
     }
-    button:disabled {
-      opacity: 0.4;
-      cursor: default;
+    #dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    body[data-state='live'] .connection {
+      color: var(--accent);
     }
     main {
-      height: calc(100dvh - 46px);
+      position: relative;
       min-height: 0;
+      margin: 12px 24px 20px;
+    }
+    #screen {
+      width: 100%;
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 8px;
-      overflow: hidden;
     }
-    body[data-mode='inline'] main {
-      height: 320px;
-    }
-    #status {
-      font-size: 11px;
-    }
-    header {
-      flex-wrap: wrap;
-    }
-    img {
+    #screen img {
       display: block;
-      max-width: 100%;
-      max-height: 100%;
+      width: auto;
+      height: auto;
+      max-width: 92%;
+      max-height: 94%;
       object-fit: contain;
-      border-radius: 5px;
+      border-radius: 14px;
+      box-shadow: var(--screen-shadow);
+      outline: 1px solid var(--line);
     }
-    #empty {
+    #placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+    }
+    .loading-device {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 76px;
+      height: 92px;
+      border-radius: 19px;
+      border: 1px solid var(--edge);
+      background: var(--glass);
+      box-shadow: var(--shadow);
+      margin-bottom: 24px;
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+    }
+    .loading-device::after {
+      content: '';
+      position: absolute;
+      bottom: 9px;
+      width: 20px;
+      height: 3px;
+      border-radius: 3px;
+      background: var(--line);
+    }
+    .spinner {
+      width: 21px;
+      height: 21px;
+      border: 2px solid var(--line);
+      border-top-color: var(--muted);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+    #placeholder-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 8px;
+    }
+    #placeholder-detail {
       color: var(--muted);
-      padding: 24px;
+      line-height: 1.7;
+      max-width: 280px;
+      margin: 0;
+      overflow-wrap: anywhere;
+    }
+    body[data-state='error'] .spinner,
+    body[data-state='ended'] .spinner,
+    body[data-state='paused'] .spinner {
+      animation: none;
+      border-color: var(--line);
+    }
+    #overlay {
+      position: absolute;
+      inset: auto 0 8px;
+      margin: auto;
+      width: max-content;
+      max-width: 90%;
+      padding: 8px 14px;
+      border-radius: 20px;
+      background: var(--glass);
+      border: 1px solid var(--edge);
+      color: var(--fg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+    }
+    footer {
+      padding: 0 16px max(14px, env(safe-area-inset-bottom));
       text-align: center;
     }
+    .dock {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 7px;
+      border-radius: 999px;
+      border: 1px solid var(--edge);
+      background: linear-gradient(145deg, rgb(255 255 255 / 12%), transparent 55%), var(--glass);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(28px) saturate(150%);
+      -webkit-backdrop-filter: blur(28px) saturate(150%);
+    }
+    button {
+      position: relative;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      padding: 12px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 10px;
+      white-space: nowrap;
+      transition:
+        background 150ms,
+        transform 150ms;
+    }
+    button:hover:not(:disabled) {
+      background: var(--hover);
+    }
+    button:active:not(:disabled) {
+      transform: scale(0.94);
+    }
+    button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    button:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+    button[aria-pressed='true'] {
+      background: var(--hover);
+    }
+    button[aria-busy='true'] svg {
+      opacity: 0;
+    }
+    button[aria-busy='true']::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border: 1.5px solid var(--line);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    button[aria-busy='true']:disabled {
+      opacity: 1;
+    }
+    svg {
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.65;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+    .divider {
+      height: 26px;
+      width: 1px;
+      background: var(--line);
+      margin: 0 5px;
+    }
+    .meta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 26px;
+      padding-top: 10px;
+      color: var(--muted);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+    #feedback {
+      color: var(--fg);
+      overflow-wrap: anywhere;
+    }
+    #feedback:empty {
+      display: none;
+    }
+    #rate {
+      opacity: 0.85;
+    }
+    .symbols {
+      position: absolute;
+      width: 0;
+      height: 0;
+      overflow: hidden;
+    }
+    @media (max-width: 380px) {
+      header {
+        padding: 16px 16px 8px;
+      }
+      main {
+        margin: 8px 12px 16px;
+      }
+      footer {
+        padding-inline: 8px;
+      }
+      button {
+        width: 42px;
+        height: 42px;
+        padding: 11px;
+      }
+      .divider {
+        margin-inline: 2px;
+      }
+      .dock {
+        gap: 2px;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .spinner {
+        animation-duration: 2s;
+      }
+      button {
+        transition: none;
+      }
+    }
   </style>
-  <body data-mode="inline">
+  <body data-mode="inline" data-state="loading" data-plugin-version="__PLUGIN_VERSION__">
+    <svg class="symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+      <symbol id="icon-device" viewBox="0 0 24 24">
+        <rect x="5" y="2.5" width="14" height="19" rx="3" />
+        <path d="M10 18.5h4" />
+      </symbol>
+      <symbol id="icon-minus" viewBox="0 0 24 24"><path d="m11 5-5 4H3v6h3l5 4zM16 12h6" /></symbol>
+      <symbol id="icon-plus" viewBox="0 0 24 24">
+        <path d="m11 5-5 4H3v6h3l5 4zM16 12h6m-3-3v6" />
+      </symbol>
+      <symbol id="icon-home" viewBox="0 0 24 24">
+        <path d="m3 10 9-7 9 7M5.5 8.5V20h5v-6h3v6h5V8.5" />
+      </symbol>
+      <symbol id="icon-pause" viewBox="0 0 24 24">
+        <path d="M8 5v14M16 5v14" stroke-width="2.5" />
+      </symbol>
+      <symbol id="icon-play" viewBox="0 0 24 24"><path d="m9 5 10 7-10 7z" /></symbol>
+      <symbol id="icon-retry" viewBox="0 0 24 24">
+        <path d="M20 10a8 8 0 1 0-2 8M20 4v6h-6" />
+      </symbol>
+      <symbol id="icon-collapse" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="3" />
+        <path d="M15 4v16m-5-11-3 3 3 3" />
+      </symbol>
+      <symbol id="icon-expand" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="18" height="16" rx="3" />
+        <path d="M15 4v16m-8-11 3 3-3 3" />
+      </symbol>
+    </svg>
     <header>
-      <i class="dot" id="dot"></i>
-      <strong id="device">Mobile Use for Codex</strong>
-      <span id="status">正在连接 Codex…</span>
-      <button id="expand" disabled>在侧栏打开</button>
-      <button id="toggle" disabled>暂停</button>
+      <div class="device-icon">
+        <svg aria-hidden="true"><use href="#icon-device" /></svg>
+      </div>
+      <div class="identity">
+        <span class="eyebrow">MOBILE MONITOR</span>
+        <strong id="device">设备监看</strong>
+      </div>
+      <div class="connection" role="status">
+        <i id="dot" aria-hidden="true"></i>
+        <span id="status">正在连接</span>
+      </div>
     </header>
-    <main id="view"><div id="empty">等待设备监看工具返回。</div></main>
+    <main id="view" aria-label="设备实时画面" aria-busy="true">
+      <div id="screen"></div>
+      <div id="placeholder" role="status">
+        <div class="loading-device" aria-hidden="true"><div class="spinner"></div></div>
+        <p id="placeholder-title">正在连接设备</p>
+        <p id="placeholder-detail">画面就绪后将在这里显示</p>
+      </div>
+      <div id="overlay" hidden></div>
+    </main>
+    <footer>
+      <div class="dock" role="toolbar" aria-label="设备与监看控制">
+        <button
+          id="volume-down"
+          data-button="VOLUME_DOWN"
+          title="降低设备音量"
+          aria-label="降低设备音量"
+          disabled
+        >
+          <svg aria-hidden="true"><use href="#icon-minus" /></svg>
+        </button>
+        <button
+          id="home"
+          data-button="HOME"
+          title="返回设备主屏幕"
+          aria-label="返回设备主屏幕"
+          disabled
+        >
+          <svg aria-hidden="true"><use href="#icon-home" /></svg>
+        </button>
+        <button
+          id="volume-up"
+          data-button="VOLUME_UP"
+          title="提高设备音量"
+          aria-label="提高设备音量"
+          disabled
+        >
+          <svg aria-hidden="true"><use href="#icon-plus" /></svg>
+        </button>
+        <span class="divider" aria-hidden="true"></span>
+        <button id="toggle" title="暂停画面" aria-label="暂停画面" aria-pressed="false" disabled>
+          <svg aria-hidden="true"><use href="#icon-pause" /></svg>
+        </button>
+        <button id="expand" title="在侧栏打开" aria-label="在侧栏打开" disabled>
+          <svg aria-hidden="true"><use href="#icon-expand" /></svg>
+        </button>
+      </div>
+      <div class="meta">
+        <span id="feedback" role="status"></span>
+        <span id="rate">等待首帧</span>
+      </div>
+    </footer>
     <script>
       /* STANDALONE_CONFIG */
       const $ = (selector) => document.querySelector(selector);
@@ -117,87 +460,190 @@
       let config = null;
       let running = false;
       let image = null;
+      let streamImage = null;
       let polling = false;
       let rpcId = 0;
       let bridgeReady = false;
       let generation = 0;
       let autoExpanded = false;
       let rendered = [];
-      function setStatus(text, color = '#888') {
+      let ended = false;
+      let disposed = false;
+      let controlBusy = false;
+      let feedbackTimer;
+      function setStatus(text, state = 'loading') {
         $('#status').textContent = text;
-        $('#dot').style.background = color;
+        document.body.dataset.state = state;
+      }
+      function placeholder(title, detail) {
+        $('#placeholder-title').textContent = title;
+        $('#placeholder-detail').textContent = detail;
+        $('#placeholder').hidden = Boolean(image);
+      }
+      function toggleLabel(text, icon) {
+        $('#toggle use').setAttribute('href', '#icon-' + icon);
+        $('#toggle').setAttribute('aria-label', text + '画面');
+        $('#toggle').title = text + '画面';
+        $('#toggle').setAttribute('aria-pressed', String(text === '继续'));
+      }
+      function updateControls() {
+        $('#toggle').disabled = !config || ended || disposed;
+        $('#expand').disabled = !bridgeReady || !config || disposed;
+        document.querySelectorAll('[data-button]').forEach((button) => {
+          button.disabled = !bridgeReady || !config || ended || disposed || controlBusy;
+          if (window.mobileCodexStandalone) {
+            button.title = '请在 Codex 监看面板中操作设备';
+          }
+        });
+      }
+      function feedback(text, persistent = false) {
+        clearTimeout(feedbackTimer);
+        $('#feedback').textContent = text;
+        $('#rate').hidden = Boolean(text);
+        if (!persistent) {
+          feedbackTimer = setTimeout(() => {
+            $('#feedback').textContent = '';
+            $('#rate').hidden = false;
+          }, 4000);
+        }
       }
       function notify(method, params) {
         parent.postMessage({ jsonrpc: '2.0', method, params }, '*');
       }
-      function rpc(method, params) {
+      function rpc(method, params, timeoutMs = 10000) {
         return new Promise((resolve, reject) => {
           const id = ++rpcId;
           const timer = setTimeout(() => {
             pending.delete(id);
             reject(Error('Codex bridge timeout'));
-          }, 10000);
+          }, timeoutMs);
           pending.set(id, { resolve, reject, timer });
           parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
         });
+      }
+      async function callTool(name, args, timeoutMs = 10000) {
+        const result = await rpc('tools/call', { name, arguments: args }, timeoutMs);
+        if (result.isError) {
+          throw Error(result.content?.find((c) => c.type === 'text')?.text || '操作失败');
+        }
+        return result;
       }
       function applyMode(mode) {
         if (!['inline', 'fullscreen'].includes(mode)) {
           return;
         }
         document.body.dataset.mode = mode;
-        $('#expand').textContent = mode === 'fullscreen' ? '收回' : '在侧栏打开';
+        const expanded = mode === 'fullscreen';
+        $('#expand use').setAttribute('href', '#icon-' + (expanded ? 'collapse' : 'expand'));
+        $('#expand').setAttribute('aria-label', expanded ? '收起侧栏' : '在侧栏打开');
+        $('#expand').title = expanded ? '收起侧栏' : '在侧栏打开';
       }
       async function displayMode(mode) {
         const response = window.openai?.requestDisplayMode
           ? await window.openai.requestDisplayMode({ mode })
           : await rpc('ui/request-display-mode', { mode });
-        applyMode(response?.mode ?? window.openai?.displayMode);
+        applyMode(response?.mode ?? window.openai?.displayMode ?? mode);
       }
       function tryAutoExpand() {
-        if (!bridgeReady || !config || autoExpanded) {
+        if (!bridgeReady || !config || autoExpanded || ended || disposed) {
           return;
         }
         autoExpanded = true;
-        if (document.body.dataset.mode === 'fullscreen') {
+        if (document.body.dataset.mode !== 'fullscreen') {
+          displayMode('fullscreen').catch((error) => {
+            $('#expand').title = '自动打开侧栏失败：' + error.message;
+          });
+        }
+      }
+      function stopStream() {
+        if (!streamImage) {
           return;
         }
-        displayMode('fullscreen').catch((error) => {
-          $('#expand').title = '自动打开侧栏失败：' + error.message;
-        });
-      }
-      function stopImage() {
-        if (!image) {
-          return;
-        }
-        image.onerror = null;
-        image.src =
-          'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-        image.remove();
-        image = null;
-      }
-      async function releaseViewer() {
-        if (bridgeReady && config) {
+        if (image === streamImage) {
+          // Preserve a still frame when pausing the diagnostic MJPEG stream.
           try {
-            await rpc('tools/call', {
-              name: 'release_frame_viewer',
-              arguments: { device: config.device.id, viewer },
-            });
+            const canvas = document.createElement('canvas');
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+            canvas.getContext('2d').drawImage(image, 0, 0);
+            const still = new Image();
+            still.alt = image.alt;
+            still.src = canvas.toDataURL('image/jpeg');
+            image.replaceWith(still);
+            image = still;
           } catch {
-            /* The server also expires abandoned viewers automatically. */
+            image = null;
+          }
+        }
+        streamImage.onload = null;
+        streamImage.onerror = null;
+        streamImage.src =
+          'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        streamImage.remove();
+        streamImage = null;
+      }
+      async function releaseViewer(device = config?.device.id) {
+        if (bridgeReady && device) {
+          try {
+            await callTool('release_frame_viewer', { device, viewer });
+          } catch {
+            /* Abandoned viewers also expire on the server. */
           }
         }
       }
       function stopViewing() {
         running = false;
         generation++;
-        stopImage();
+        stopStream();
         void releaseViewer();
+        $('#view').setAttribute('aria-busy', 'false');
+      }
+      async function finish() {
+        if (ended || disposed) {
+          return;
+        }
+        ended = true;
+        stopViewing();
+        clearInterval(statusTimer);
+        image?.remove();
+        image = null;
+        $('#overlay').hidden = true;
+        $('#rate').textContent = '采集已停止';
+        setStatus('已结束', 'ended');
+        placeholder('本次监看已结束', '设备操作完成，画面采集已停止');
+        updateControls();
+        // requestClose is an optional host extension; inline closes the side panel on other hosts.
+        try {
+          if (window.openai?.requestClose) {
+            await window.openai.requestClose();
+            return;
+          }
+          if (window.mobileCodexStandalone) {
+            window.close();
+            return;
+          }
+        } catch {
+          /* Fall back to closing the expanded panel. */
+        }
+        if (bridgeReady) {
+          try {
+            await displayMode('inline');
+          } catch {
+            feedback('监看已结束，可关闭此面板');
+          }
+        }
       }
       function fail(error) {
+        if (ended || disposed) {
+          return;
+        }
         stopViewing();
-        setStatus(error.message, '#c17b27');
-        $('#toggle').textContent = '重连';
+        setStatus('连接中断', 'error');
+        placeholder('暂时无法接收画面', error.message);
+        $('#overlay').textContent = '连接中断 · 点击重连';
+        $('#overlay').hidden = !image;
+        $('#rate').textContent = '连接中断';
+        toggleLabel('重连', 'retry');
       }
       function showRate(capture) {
         const now = performance.now();
@@ -206,47 +652,46 @@
           rendered.shift();
         }
         const fps = rendered.length > 1 ? ((rendered.length - 1) * 1000) / (now - rendered[0]) : 0;
-        setStatus('采集 ' + capture.toFixed(1) + ' · 显示 ' + fps.toFixed(1) + ' fps', '#32a46c');
+        $('#rate').textContent =
+          '采集 ' + capture.toFixed(1) + ' · 显示 ' + fps.toFixed(1) + ' fps';
+        setStatus('实时', 'live');
       }
-      async function streamFrames(current) {
+      async function streamFrames(current, device) {
         let after = 0;
         while (running && generation === current) {
           try {
-            const result = await rpc('tools/call', {
-              name: 'read_frame',
-              arguments: { device: config.device.id, viewer, after, waitMs: 1000 },
-            });
+            const result = await callTool('read_frame', { device, viewer, after, waitMs: 1000 });
             if (!running || generation !== current) {
               return;
             }
-            if (result.isError) {
-              throw Error(result.content?.find((c) => c.type === 'text')?.text || '画面读取失败');
-            }
             const state = result.structuredContent;
+            if (state?.activeOperations === 0) {
+              await finish();
+              return;
+            }
             if (state?.error) {
               throw Error(state.error);
             }
             const frame = result._meta?.mobileCodexFrame;
-            if (state?.activeOperations === 0) {
-              if (frame) {
-                image.src = 'data:image/jpeg;base64,' + frame.jpeg;
-                await image.decode();
-                after = frame.sequence;
-              }
-              rendered = [];
-              setStatus('操作已结束 · 采集已停止');
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-              continue;
-            }
             if (!frame) {
-              setStatus('等待设备画面…', '#c17b27');
+              if (!image) {
+                setStatus('等待画面');
+              }
               continue;
             }
-            image.src = 'data:image/jpeg;base64,' + frame.jpeg;
-            await image.decode();
+            // Decode off-screen so neither a missing src nor an invalid frame can flash a broken image.
+            const next = new Image();
+            next.alt = config.device.name + ' 实时屏幕';
+            next.src = 'data:image/jpeg;base64,' + frame.jpeg;
+            await next.decode();
             if (!running || generation !== current) {
               return;
             }
+            $('#screen').replaceChildren(next);
+            image = next;
+            $('#placeholder').hidden = true;
+            $('#overlay').hidden = true;
+            $('#view').setAttribute('aria-busy', 'false');
             after = frame.sequence;
             showRate(state?.fps ?? 0);
           } catch (error) {
@@ -258,38 +703,117 @@
         }
       }
       function start() {
-        if (!config || (!bridgeReady && !window.mobileCodexStandalone)) {
+        if (!config || ended || disposed || (!bridgeReady && !window.mobileCodexStandalone)) {
           return;
         }
         running = true;
         const current = ++generation;
         rendered = [];
-        $('#toggle').textContent = '暂停';
-        stopImage();
-        image = new Image();
-        image.alt = config.device.name + ' 实时屏幕';
-        $('#empty')?.remove();
-        $('#view').append(image);
-        setStatus('正在接收画面…', '#c17b27');
+        toggleLabel('暂停', 'pause');
+        stopStream();
+        $('#overlay').hidden = true;
+        $('#rate').textContent = '等待首帧';
+        $('#view').setAttribute('aria-busy', 'true');
+        placeholder('正在接收画面', '首次连接可能需要几秒钟');
+        setStatus('正在连接');
         if (window.mobileCodexStandalone) {
-          image.onerror = () => fail(Error('画面连接中断，请重连'));
-          image.src = config.streamUrl + '?t=' + Date.now();
+          const next = new Image();
+          streamImage = next;
+          next.alt = config.device.name + ' 实时屏幕';
+          next.onload = () => {
+            if (!running || generation !== current) {
+              return;
+            }
+            $('#screen').replaceChildren(next);
+            image = next;
+            $('#placeholder').hidden = true;
+            $('#view').setAttribute('aria-busy', 'false');
+            setStatus('实时', 'live');
+          };
+          next.onerror = () => fail(Error('画面连接中断，请重连'));
+          next.src = config.streamUrl + '?t=' + Date.now();
         } else {
-          void streamFrames(current);
+          void streamFrames(current, config.device.id);
           tryAutoExpand();
         }
       }
       function mount(result) {
         const next = result?._meta?.mobileCodex;
-        if (!next) {
+        if (!next || disposed) {
           return;
         }
         stopViewing();
+        image?.remove();
+        image = null;
         config = next;
+        ended = false;
+        clearInterval(statusTimer);
+        statusTimer = setInterval(checkStatus, 1000);
         $('#device').textContent = config.device.name;
-        $('#toggle').disabled = false;
-        $('#expand').disabled = !bridgeReady;
+        updateControls();
         start();
+      }
+      async function checkStatus() {
+        // While paused or disconnected, continue observing lifecycle without holding a frame viewer.
+        if (
+          !config ||
+          ended ||
+          disposed ||
+          polling ||
+          (!window.mobileCodexStandalone && (!bridgeReady || running))
+        ) {
+          return;
+        }
+        polling = true;
+        const currentConfig = config;
+        try {
+          let state;
+          if (window.mobileCodexStandalone) {
+            const response = await fetch(config.statusUrl, { cache: 'no-store' });
+            if (!response.ok) {
+              throw Error('监看会话已结束');
+            }
+            state = await response.json();
+          } else {
+            state = (await callTool('monitor_status', { device: config.device.id }))
+              .structuredContent;
+          }
+          if (currentConfig !== config || ended || disposed) {
+            return;
+          }
+          if (state?.activeOperations === 0) {
+            await finish();
+            return;
+          }
+          if (state?.error && running) {
+            throw Error(state.error);
+          }
+          if (window.mobileCodexStandalone && running) {
+            $('#rate').textContent = '采集 ' + (state.fps ?? 0).toFixed(1) + ' fps';
+            if (image) {
+              setStatus('实时', 'live');
+            }
+          }
+        } catch (error) {
+          if (currentConfig === config && !ended && !disposed) {
+            fail(error);
+          }
+        } finally {
+          polling = false;
+        }
+      }
+      let statusTimer = null;
+      function teardown() {
+        disposed = true;
+        stopViewing();
+        clearInterval(statusTimer);
+        clearTimeout(feedbackTimer);
+        for (const request of pending.values()) {
+          clearTimeout(request.timer);
+          request.reject(Error('监看面板已关闭'));
+        }
+        pending.clear();
+        updateControls();
       }
       addEventListener('message', (event) => {
         if (event.source !== parent) {
@@ -315,57 +839,71 @@
           applyMode(message.params?.displayMode);
         }
         if (message.method === 'ui/resource-teardown') {
-          stopViewing();
+          teardown();
           parent.postMessage({ jsonrpc: '2.0', id: message.id, result: {} }, '*');
         }
       });
+      addEventListener('pagehide', teardown);
       addEventListener('openai:set_globals', (event) =>
         applyMode(event.detail?.globals?.displayMode),
       );
       $('#toggle').onclick = () => {
         if (running) {
           stopViewing();
-          $('#toggle').textContent = '继续';
-          setStatus('已暂停');
+          toggleLabel('继续', 'play');
+          setStatus('已暂停', 'paused');
+          $('#rate').textContent = '画面已暂停';
+          placeholder('画面已暂停', '点击继续以接收设备画面');
+          $('#overlay').textContent = '画面已暂停';
+          $('#overlay').hidden = !image;
         } else {
           start();
         }
       };
       $('#expand').onclick = () =>
         displayMode(document.body.dataset.mode === 'fullscreen' ? 'inline' : 'fullscreen').catch(
-          (error) => setStatus('当前客户端未允许展开：' + error.message, '#c17b27'),
+          (error) => feedback('无法切换侧栏：' + error.message),
         );
-      setInterval(async () => {
-        if (!window.mobileCodexStandalone || !config || !running || polling) {
-          return;
-        }
-        polling = true;
-        try {
-          const response = await fetch(config.statusUrl, { cache: 'no-store' });
-          if (!response.ok) {
-            throw Error('监看会话已结束');
-          }
-          const state = await response.json();
-          if (!running) {
+      document.querySelectorAll('[data-button]').forEach((button) => {
+        button.onclick = async () => {
+          if (controlBusy || ended || !config) {
             return;
           }
-          if (state.error) {
-            throw Error(state.error);
-          }
-          if (state.activeOperations === 0) {
-            setStatus('操作已结束 · 采集已停止');
-            return;
-          }
-          setStatus(
-            state.ageMs === null ? '等待设备画面…' : '采集 ' + state.fps.toFixed(1) + ' fps',
-            state.ageMs < 3000 ? '#32a46c' : '#c17b27',
+          controlBusy = true;
+          button.setAttribute('aria-busy', 'true');
+          feedback(
+            button.dataset.button === 'HOME'
+              ? '正在返回主屏幕…'
+              : button.dataset.button === 'VOLUME_UP'
+                ? '正在提高音量…'
+                : '正在降低音量…',
+            true,
           );
-        } catch (error) {
-          fail(error);
-        } finally {
-          polling = false;
-        }
-      }, 1000);
+          updateControls();
+          try {
+            const result = await callTool(
+              'press_monitor_button',
+              { device: config.device.id, button: button.dataset.button },
+              25000,
+            );
+            feedback(
+              button.dataset.button === 'HOME'
+                ? result.structuredContent?.homeVerified
+                  ? '已返回主屏幕'
+                  : '已发送 Home 指令'
+                : button.dataset.button === 'VOLUME_UP'
+                  ? '已提高音量'
+                  : '已降低音量',
+            );
+          } catch (error) {
+            feedback('操作失败：' + error.message);
+          } finally {
+            controlBusy = false;
+            button.removeAttribute('aria-busy');
+            updateControls();
+          }
+        };
+      });
       (async () => {
         if (window.mobileCodexStandalone) {
           mount({ _meta: { mobileCodex: window.mobileCodexStandalone } });
@@ -377,17 +915,22 @@
             appCapabilities: {},
             protocolVersion: '2026-01-26',
           });
+          if (disposed) {
+            return;
+          }
           bridgeReady = true;
           applyMode(initialized?.hostContext?.displayMode);
           notify('ui/notifications/initialized', {});
-          $('#expand').disabled = !config;
+          updateControls();
           if (config) {
             start();
           } else {
-            setStatus('Codex 已连接 · 等待设备');
+            setStatus('等待设备');
           }
         } catch (error) {
-          setStatus('Widget 桥接失败：' + error.message, '#c17b27');
+          if (!disposed) {
+            fail(Error('无法连接 Codex：' + error.message));
+          }
         }
       })();
     </script>

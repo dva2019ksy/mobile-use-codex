@@ -4,8 +4,9 @@ import { mkdtemp, writeFile, chmod, readFile, rename, rm } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EventEmitter } from 'node:events';
+import { spawn } from 'node:child_process';
 import { PassThrough } from 'node:stream';
-import { connectBroker } from './broker-client.mjs';
+import { brokerRequest, connectBroker } from './broker-client.mjs';
 import { createMonitorService } from './monitor-service.mjs';
 import { Capture } from './capture.mjs';
 
@@ -23,6 +24,99 @@ else { appendFileSync(${JSON.stringify(counts)}, process.pid + '\\n'); setInterv
   );
   await chmod(cli, 0o700);
   return { dir, cli, counts };
+}
+
+for (const pressesToHome of [1, 2, 3]) {
+  test(`iOS Home verifies the desktop and retries only if needed (required presses: ${pressesToHome})`, async (t) => {
+    const dir = await mkdtemp(join(tmpdir(), 'mc-home-'));
+    const cli = join(dir, 'mobilecli');
+    const counter = join(dir, 'presses');
+    await writeFile(counter, '0');
+    await writeFile(
+      cli,
+      `#!${process.execPath}
+import { readFileSync, writeFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+const count = () => Number(readFileSync(${JSON.stringify(counter)}, 'utf8'));
+let data;
+if (args[0] === 'devices') data = { devices: [{ id: 'ipad', name: 'Test iPad', platform: 'ios', state: 'online' }] };
+else if (args[0] === 'io' && args[1] === 'button') { writeFileSync(${JSON.stringify(counter)}, String(count() + 1)); data = {}; }
+else if (args[0] === 'apps' && args[1] === 'foreground') data = { packageName: count() >= ${pressesToHome} ? 'com.apple.springboard' : 'com.apple.mobilesafari' };
+else process.exit(1);
+console.log(JSON.stringify({ status: 'ok', data }));
+`,
+    );
+    await chmod(cli, 0o700);
+    const service = await createMonitorService({ cli, template: '' });
+    t.after(async () => {
+      await service.close();
+      await rm(dir, { recursive: true, force: true });
+    });
+    await service.methods.openMonitor({ device: 'ipad', owner: 'test' });
+    const result = service.methods.pressMonitorButton({
+      device: 'ipad',
+      owner: 'test',
+      button: 'HOME',
+    });
+    if (pressesToHome === 3) {
+      await assert.rejects(result, /未能返回主屏幕/);
+    } else {
+      assert.deepEqual(await result, {
+        button: 'HOME',
+        homeVerified: true,
+        presses: pressesToHome,
+      });
+    }
+    assert.equal(Number(await readFile(counter, 'utf8')), Math.min(pressesToHome, 2));
+  });
+}
+
+for (const activeOperations of [0, 1]) {
+  test(`an older broker is upgraded only when idle (active operations: ${activeOperations})`, async (t) => {
+    const { dir, cli } = await fixture();
+    const socket = join(dir, 'monitor-v1.sock');
+    const legacy = spawn(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `import { createServer } from 'node:http';
+const server = createServer((req, res) => {
+  req.resume();
+  req.on('end', () => res.end(JSON.stringify({ result: {
+    version: '0.1.2', pid: process.pid, activeOperations: ${activeOperations}
+  } })));
+});
+server.listen(${JSON.stringify(socket)}, () => process.stdout.write('ready'));`,
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    let broker;
+    t.after(async () => {
+      if (broker) {
+        await broker.close();
+        process.kill(broker.pid, 'SIGTERM');
+      }
+      if (legacy.exitCode === null && legacy.signalCode === null) {
+        legacy.kill('SIGTERM');
+      }
+      await rm(dir, { recursive: true, force: true });
+    });
+    await new Promise((resolve, reject) => {
+      legacy.stdout.once('data', resolve);
+      legacy.once('error', reject);
+      legacy.once('exit', () => reject(Error('Legacy fixture exited before listening')));
+    });
+    if (activeOperations) {
+      await assert.rejects(connectBroker({ cli, runtimeDir: dir }), /finish operations/);
+      assert.equal(legacy.signalCode, null);
+      assert.equal((await brokerRequest(socket, 'health')).activeOperations, 1);
+    } else {
+      broker = await connectBroker({ cli, runtimeDir: dir });
+      assert.notEqual(broker.pid, legacy.pid);
+      assert.equal((await broker.call('health')).version, '0.1.4');
+    }
+  });
 }
 
 test('independent connections share a daemon and capture; finishing one preserves another; the last stops despite viewers', async (t) => {

@@ -216,7 +216,7 @@ enabled = true
   const catalog = await rpc('mcpServerStatus/list', { limit: 100, detail: 'toolsAndAuthOnly' });
   for (const [name, count] of [
     ['mobile-control', 33],
-    ['mobile-use-codex', 9],
+    ['mobile-use-codex', 10],
   ]) {
     const server = catalog.data.find((server) => server.name === name);
     assert.equal(

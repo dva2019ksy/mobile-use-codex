@@ -46,11 +46,30 @@ export async function connectBroker({
   await mkdir(runtimeDir, { recursive: true, mode: 0o700 });
   const socket = join(runtimeDir, 'monitor-v1.sock');
   const lock = join(runtimeDir, 'startup.lock');
-  const health = async () => {
+  const health = async ({ upgradeIdle = false } = {}) => {
     try {
       const value = await brokerRequest(socket, 'health');
-      if (value.version !== '0.1.2') {
-        throw Error('Monitor service version differs; finish operations before updating');
+      if (value.version !== '0.1.4') {
+        if (value.activeOperations !== 0) {
+          throw Error('Monitor service version differs; finish operations before updating');
+        }
+        if (upgradeIdle) {
+          // Only the startup-lock owner retires an idle daemon. Never interrupt device work.
+          process.kill(value.pid, 'SIGTERM');
+          for (let n = 0; n < 100; n++) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            try {
+              await brokerRequest(socket, 'health');
+            } catch (error) {
+              if (['ENOENT', 'ECONNREFUSED', 'ECONNRESET'].includes(error.code)) {
+                return null;
+              }
+              throw error;
+            }
+          }
+          throw Error('Previous monitor service did not stop');
+        }
+        return null;
       }
       return value;
     } catch (error) {
@@ -67,7 +86,7 @@ export async function connectBroker({
       await mkdir(lock);
       owned = true;
       await writeFile(join(lock, 'owner.json'), JSON.stringify({ pid: process.pid }));
-      ready = await health();
+      ready = await health({ upgradeIdle: true });
       if (!ready) {
         // The startup lock serializes stale-socket removal and daemon creation.
         await unlink(socket).catch((error) => {

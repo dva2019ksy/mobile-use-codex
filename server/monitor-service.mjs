@@ -97,9 +97,9 @@ export async function createMonitorService({
     return session;
   };
   const methods = {
-    // This is the backward-compatible broker protocol version, not the plugin release.
+    // Broker protocol version, independent of the plugin release.
     health: async () => ({
-      version: '0.1.2',
+      version: '0.1.4',
       pid: process.pid,
       origin,
       cli,
@@ -217,6 +217,60 @@ export async function createMonitorService({
     },
     async monitorStatus({ device }) {
       return status(requireSession(device));
+    },
+    async pressMonitorButton({ device, owner, button }) {
+      if (!['HOME', 'VOLUME_UP', 'VOLUME_DOWN'].includes(button)) {
+        throw Error('Unsupported monitor button');
+      }
+      const session = requireSession(device);
+      const press = async () => {
+        const requireOperation = () => {
+          if (![...session.operations.values()].some((lease) => lease.owner === owner)) {
+            throw Error('Device operation has ended; open a monitor before using controls');
+          }
+        };
+        const command = async (args, timeout) => {
+          requireOperation();
+          const { stdout } = await run(cli, [...args, '--device', device], {
+            timeout,
+            maxBuffer: 100000,
+          });
+          const response = JSON.parse(stdout);
+          if (response.status !== 'ok') {
+            throw Error(response.error || 'Device button failed');
+          }
+          return response.data;
+        };
+        const pressOnce = () => command(['io', 'button', button], 5000);
+        await pressOnce();
+        if (button !== 'HOME' || session.device.platform !== 'ios') {
+          return { button };
+        }
+        // iOS may consume the first Home event without leaving the app. Check the
+        // actual foreground app before retrying; never send an unconditional double press.
+        const isHome = async () => {
+          for (const delay of [350, 650]) {
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            const foreground = await command(['apps', 'foreground'], 1500);
+            if (foreground?.packageName === 'com.apple.springboard') {
+              return true;
+            }
+          }
+          return false;
+        };
+        if (await isHome()) {
+          return { button, homeVerified: true, presses: 1 };
+        }
+        await pressOnce();
+        if (!(await isHome())) {
+          throw Error('未能返回主屏幕，请重试');
+        }
+        return { button, homeVerified: true, presses: 2 };
+      };
+      // Multiple widgets may control one device. Preserve the order of button presses.
+      const result = (session.controls ?? Promise.resolve()).then(press);
+      session.controls = result.catch(() => {});
+      return result;
     },
   };
   return {
