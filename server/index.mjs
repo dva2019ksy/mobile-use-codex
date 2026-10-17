@@ -205,6 +205,31 @@ export async function createMobileCodex({
 
   const widgetOnly = { ui: { visibility: ['app'] }, 'openai/widgetAccessible': true };
   server.registerTool(
+    'tap_monitor_screen',
+    {
+      title: 'Tap monitored screen',
+      description:
+        'Widget-only tap within a live device frame. Maps a normalized image position to native screen coordinates; requires this connection’s active operation.',
+      inputSchema: z.object({
+        device: z.string().min(1),
+        x: z.number().min(0).max(1),
+        y: z.number().min(0).max(1),
+        frameWidth: z.number().int().min(1).max(10000),
+        frameHeight: z.number().int().min(1).max(10000),
+        sequence: z.number().int().min(1),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: widgetOnly,
+    },
+    safe(async (args) => {
+      const point = await broker.call('tapMonitorScreen', args);
+      return {
+        content: [{ type: 'text', text: 'Tapped device screen.' }],
+        structuredContent: point,
+      };
+    }),
+  );
+  server.registerTool(
     'press_monitor_button',
     {
       title: 'Press monitor device button',

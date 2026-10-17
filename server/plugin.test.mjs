@@ -32,7 +32,7 @@ appendFileSync(${JSON.stringify(commands)}, JSON.stringify(args) + '\\n');
 const ok = data => console.log(JSON.stringify({ status: 'ok', data }));
 if (args[0] === '--version') console.log('mobilecli version 1.0.18');
 else if (args[0] === 'devices') ok({ devices: [${JSON.stringify(device)}] });
-else if (args[0] === 'screencapture') setInterval(() => process.stdout.write(Buffer.from([255,216,1,255,217])), 20);
+else if (args[0] === 'screencapture') setInterval(() => process.stdout.write(Buffer.from([255,216,255,192,0,11,8,3,32,1,244,1,1,17,0,255,217])), 20);
 else if (args[0] === 'device' && args[1] === 'info') ok({ device: { screenSize: { width: 1000, height: 1600, scale: 1 } } });
 else if (args[0] === 'dump') {
   if (process.env.MOBILE_CODEX_TEST_UI_FAILURE) console.log(JSON.stringify({ status: 'error', error: 'Synthetic UI read failure' }));
@@ -94,6 +94,9 @@ else { console.error('Unexpected command'); process.exit(1); }
     const buttons = monitorTools.find((tool) => tool.name === 'press_monitor_button');
     assert.equal(buttons.annotations.readOnlyHint, false);
     assert.deepEqual(buttons._meta.ui.visibility, ['app']);
+    const tapTool = monitorTools.find((tool) => tool.name === 'tap_monitor_screen');
+    assert.equal(tapTool.annotations.readOnlyHint, false);
+    assert.deepEqual(tapTool._meta.ui.visibility, ['app']);
     assert.equal(
       monitorTools.find((tool) => tool.name === 'monitor_status')._meta['openai/widgetAccessible'],
       true,
@@ -118,6 +121,19 @@ else { console.error('Unexpected command'); process.exit(1); }
       waitMs: 1000,
     });
     assert(frame._meta.mobileCodexFrame?.jpeg);
+    const tapArgs = {
+      device: device.id,
+      x: 0.25,
+      y: 0.75,
+      frameWidth: 500,
+      frameHeight: 800,
+      sequence: frame.structuredContent.frames,
+    };
+    const tapped = await monitor.call('tap_monitor_screen', tapArgs);
+    assert(!tapped.isError, JSON.stringify(tapped));
+    assert.deepEqual(tapped.structuredContent, { x: 250, y: 1200 });
+    assert((await observer.call('tap_monitor_screen', tapArgs)).isError);
+    assert((await monitor.call('tap_monitor_screen', { ...tapArgs, x: -1 })).isError);
     const elements = await control.call('mobile_list_elements_on_screen', {
       device: device.id,
       format: 'json',
@@ -150,6 +166,7 @@ else { console.error('Unexpected command'); process.exit(1); }
       (await monitor.call('press_monitor_button', { device: device.id, button: 'HOME' })).isError,
       'controls must not revive an ended operation',
     );
+    assert((await monitor.call('tap_monitor_screen', tapArgs)).isError);
     const calls = (await readFile(commands, 'utf8')).trim().split('\n').map(JSON.parse);
     assert(calls.some((args) => args.join(' ') === `apps launch test.app --device ${device.id}`));
     assert(calls.some((args) => args.join(' ') === `io tap @e1 --device ${device.id}`));

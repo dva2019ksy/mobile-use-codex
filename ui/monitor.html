@@ -57,6 +57,21 @@
         sans-serif;
       -webkit-font-smoothing: antialiased;
     }
+    /* Inline hosts size the iframe from its content. A viewport-based content
+       height feeds that measurement back into the iframe's own height. */
+    html[data-hosted='true'] body[data-mode='inline'] {
+      height: 96px;
+      min-height: 0;
+      grid-template-rows: 1fr;
+    }
+    html[data-hosted='true'] body[data-mode='inline'] header {
+      padding: 20px 24px;
+    }
+    html[data-hosted='true'] body[data-mode='inline'] main,
+    html[data-hosted='true'] body[data-mode='inline'] footer,
+    body[data-state='ended'] .spinner {
+      display: none;
+    }
     header {
       display: flex;
       align-items: center;
@@ -170,6 +185,42 @@
       width: 100%;
       height: 100%;
       object-fit: contain;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    #display[data-interactive='true'] {
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .tap-ring {
+      position: absolute;
+      z-index: 3;
+      width: 28px;
+      height: 28px;
+      margin: -14px;
+      pointer-events: none;
+      border: 1.5px solid rgb(255 255 255 / 90%);
+      border-radius: 50%;
+      background: rgb(255 255 255 / 18%);
+      box-shadow:
+        0 0 0 1px rgb(0 0 0 / 20%),
+        0 2px 12px rgb(0 0 0 / 25%);
+      animation: tap-feedback 450ms ease-out both;
+    }
+    @keyframes tap-feedback {
+      from {
+        opacity: 1;
+        transform: scale(0.65);
+      }
+      to {
+        opacity: 0;
+        transform: scale(1.5);
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .tap-ring {
+        animation: none;
+      }
     }
     #placeholder {
       position: absolute;
@@ -481,6 +532,9 @@
     </footer>
     <script>
       /* STANDALONE_CONFIG */
+      if (parent !== window && !window.mobileCodexStandalone) {
+        document.documentElement.dataset.hosted = 'true';
+      }
       const $ = (selector) => document.querySelector(selector);
       const viewer =
         window.crypto?.randomUUID?.() ??
@@ -494,11 +548,13 @@
       let rpcId = 0;
       let bridgeReady = false;
       let generation = 0;
-      let autoExpanded = false;
       let rendered = [];
       let ended = false;
       let disposed = false;
       let controlBusy = false;
+      let displayedFrame = null;
+      let frameReceivedAt = 0;
+      let pointerStart = null;
       let feedbackTimer;
       let frameSize = [4, 3];
       function restoreFrameSize(device) {
@@ -552,8 +608,12 @@
       const resizeObserver = new ResizeObserver(fitDevice);
       resizeObserver.observe($('#screen'));
       function setStatus(text, state = 'loading') {
+        const changed = document.body.dataset.state !== state;
         $('#status').textContent = text;
         document.body.dataset.state = state;
+        if (changed) {
+          updateControls();
+        }
       }
       function placeholder(title, detail) {
         $('#placeholder-title').textContent = title;
@@ -574,6 +634,22 @@
             button.title = '请在 Codex 监看面板中操作设备';
           }
         });
+        $('#display').dataset.interactive = String(canTap());
+      }
+      function canTap() {
+        return Boolean(
+          bridgeReady &&
+          !window.mobileCodexStandalone &&
+          config &&
+          running &&
+          !ended &&
+          !disposed &&
+          !controlBusy &&
+          image &&
+          displayedFrame &&
+          performance.now() - frameReceivedAt <= 2000 &&
+          document.body.dataset.state === 'live',
+        );
       }
       function feedback(text, persistent = false) {
         clearTimeout(feedbackTimer);
@@ -619,17 +695,6 @@
           : await rpc('ui/request-display-mode', { mode });
         applyMode(response?.mode ?? window.openai?.displayMode ?? mode);
       }
-      function tryAutoExpand() {
-        if (!bridgeReady || !config || autoExpanded || ended || disposed) {
-          return;
-        }
-        autoExpanded = true;
-        if (document.body.dataset.mode !== 'fullscreen') {
-          displayMode('fullscreen').catch((error) => {
-            feedback('无法自动打开侧栏：' + error.message);
-          });
-        }
-      }
       function stopStream() {
         if (!streamImage) {
           return;
@@ -668,6 +733,8 @@
       }
       function stopViewing() {
         running = false;
+        displayedFrame = null;
+        pointerStart = null;
         generation++;
         stopStream();
         void releaseViewer();
@@ -688,6 +755,11 @@
         setStatus('已结束', 'ended');
         placeholder('本次监看已结束', '设备操作完成，画面采集已停止');
         updateControls();
+        // Historical widgets mount inline too. Rendering an ended card should
+        // never reopen or close the host's current side panel.
+        if (!window.mobileCodexStandalone && document.body.dataset.mode !== 'fullscreen') {
+          return;
+        }
         // requestClose is an optional host extension; inline closes the side panel on other hosts.
         try {
           if (window.openai?.requestClose) {
@@ -701,7 +773,7 @@
         } catch {
           /* Fall back to closing the expanded panel. */
         }
-        if (bridgeReady) {
+        if (bridgeReady && !disposed && document.body.dataset.mode === 'fullscreen') {
           try {
             await displayMode('inline');
           } catch {
@@ -768,6 +840,12 @@
               image?.remove();
             }
             image = next;
+            displayedFrame = {
+              sequence: frame.sequence,
+              frameWidth: next.naturalWidth,
+              frameHeight: next.naturalHeight,
+            };
+            frameReceivedAt = performance.now();
             fitDevice();
             $('#placeholder').hidden = true;
             $('#overlay').hidden = true;
@@ -787,6 +865,7 @@
           return;
         }
         running = true;
+        displayedFrame = null;
         const current = ++generation;
         rendered = [];
         toggleLabel('暂停', 'pause');
@@ -818,7 +897,6 @@
           next.src = config.streamUrl + '?t=' + Date.now();
         } else {
           void streamFrames(current, config.device.id);
-          tryAutoExpand();
         }
       }
       function mount(result) {
@@ -890,6 +968,9 @@
       }
       let statusTimer = null;
       function teardown() {
+        if (disposed) {
+          return;
+        }
         disposed = true;
         resizeObserver.disconnect();
         stopViewing();
@@ -910,7 +991,7 @@
         if (!message || message.jsonrpc !== '2.0') {
           return;
         }
-        if (message.id !== undefined && pending.has(message.id)) {
+        if (!message.method && message.id !== undefined && pending.has(message.id)) {
           const request = pending.get(message.id);
           clearTimeout(request.timer);
           pending.delete(message.id);
@@ -987,6 +1068,79 @@
           }
         };
       });
+      $('#display').addEventListener('pointerdown', (event) => {
+        if (!canTap() || !event.isPrimary || event.button !== 0) {
+          return;
+        }
+        pointerStart = {
+          id: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          time: performance.now(),
+          width: displayedFrame.frameWidth,
+          height: displayedFrame.frameHeight,
+        };
+        $('#display').setPointerCapture(event.pointerId);
+      });
+      $('#display').addEventListener('pointercancel', () => {
+        pointerStart = null;
+      });
+      $('#display').addEventListener('pointermove', (event) => {
+        if (
+          pointerStart &&
+          Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 8
+        ) {
+          pointerStart = null;
+        }
+      });
+      $('#display').addEventListener('pointerup', async (event) => {
+        const start = pointerStart;
+        pointerStart = null;
+        if (
+          !canTap() ||
+          !start ||
+          start.id !== event.pointerId ||
+          performance.now() - start.time > 500 ||
+          Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8 ||
+          start.width !== displayedFrame.frameWidth ||
+          start.height !== displayedFrame.frameHeight
+        ) {
+          return;
+        }
+        // Ignore the shell and any object-fit letterboxing, even while resizing.
+        const rect = image.getBoundingClientRect();
+        const scale = Math.min(rect.width / image.naturalWidth, rect.height / image.naturalHeight);
+        const width = image.naturalWidth * scale;
+        const height = image.naturalHeight * scale;
+        const left = rect.left + (rect.width - width) / 2;
+        const top = rect.top + (rect.height - height) / 2;
+        const x = (event.clientX - left) / width;
+        const y = (event.clientY - top) / height;
+        if (x < 0 || x > 1 || y < 0 || y > 1 || !Number.isFinite(x + y)) {
+          return;
+        }
+        const args = { device: config.device.id, x, y, ...displayedFrame };
+        const ring = document.createElement('span');
+        ring.className = 'tap-ring';
+        ring.setAttribute('aria-hidden', 'true');
+        const displayRect = $('#display').getBoundingClientRect();
+        ring.style.left = event.clientX - displayRect.left + 'px';
+        ring.style.top = event.clientY - displayRect.top + 'px';
+        $('#display').append(ring);
+        setTimeout(() => ring.remove(), 500);
+        controlBusy = true;
+        updateControls();
+        feedback('正在操作…', true);
+        try {
+          await callTool('tap_monitor_screen', args, 20000);
+          feedback('已点击');
+        } catch (error) {
+          feedback('操作失败：' + error.message);
+        } finally {
+          controlBusy = false;
+          updateControls();
+        }
+      });
       (async () => {
         if (window.mobileCodexStandalone) {
           mount({ _meta: { mobileCodex: window.mobileCodexStandalone } });
@@ -1002,6 +1156,7 @@
             return;
           }
           bridgeReady = true;
+          document.documentElement.dataset.hosted = 'true';
           applyMode(initialized?.hostContext?.displayMode);
           notify('ui/notifications/initialized', {});
           updateControls();

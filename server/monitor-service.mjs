@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Capture } from './capture.mjs';
+import { jpegSize, screenPoint } from './screen-point.mjs';
 
 const run = promisify(execFile);
 export const OPERATION_LEASE_MS = 90000;
@@ -96,10 +97,27 @@ export async function createMonitorService({
     }
     return session;
   };
+  const requireOperation = (session, owner) => {
+    if (![...session.operations.values()].some((lease) => lease.owner === owner)) {
+      throw Error('Device operation has ended; open a monitor before using controls');
+    }
+  };
+  const command = async (session, owner, args, timeout) => {
+    requireOperation(session, owner);
+    const { stdout } = await run(cli, [...args, '--device', session.device.id], {
+      timeout,
+      maxBuffer: 100000,
+    });
+    const response = JSON.parse(stdout);
+    if (response.status !== 'ok') {
+      throw Error(response.error || 'Device control failed');
+    }
+    return response.data;
+  };
   const methods = {
     // Broker protocol version, independent of the plugin release.
     health: async () => ({
-      version: '0.1.5',
+      version: '0.1.6',
       pid: process.pid,
       origin,
       cli,
@@ -218,30 +236,49 @@ export async function createMonitorService({
     async monitorStatus({ device }) {
       return status(requireSession(device));
     },
+    async tapMonitorScreen({ device, owner, x, y, frameWidth, frameHeight, sequence }) {
+      const session = requireSession(device);
+      const tap = async () => {
+        requireOperation(session, owner);
+        const live = session.capture.status();
+        if (
+          live.state !== 'streaming' ||
+          live.ageMs === null ||
+          live.ageMs > 2000 ||
+          !Number.isInteger(sequence) ||
+          sequence < 1 ||
+          sequence > live.frames ||
+          live.frames - sequence > session.config.targetFps * 2
+        ) {
+          throw Error('请等待实时画面后再点击');
+        }
+        const currentFrame = jpegSize(session.capture.latestFrame);
+        if (
+          !currentFrame ||
+          currentFrame.width !== frameWidth ||
+          currentFrame.height !== frameHeight
+        ) {
+          throw Error('屏幕方向已变化，请等待新画面后再点击');
+        }
+        const act = async () => {
+          const info = await command(session, owner, ['device', 'info'], 8000);
+          const point = screenPoint({ x, y, frameWidth, frameHeight }, info?.device?.screenSize);
+          await command(session, owner, ['io', 'tap', `${point.x},${point.y}`], 8000);
+          return point;
+        };
+        return session.device.platform === 'ios' ? session.capture.withControl(act) : act();
+      };
+      const result = (session.controls ?? Promise.resolve()).then(tap);
+      session.controls = result.catch(() => {});
+      return result;
+    },
     async pressMonitorButton({ device, owner, button }) {
       if (!['HOME', 'VOLUME_UP', 'VOLUME_DOWN'].includes(button)) {
         throw Error('Unsupported monitor button');
       }
       const session = requireSession(device);
       const press = async () => {
-        const requireOperation = () => {
-          if (![...session.operations.values()].some((lease) => lease.owner === owner)) {
-            throw Error('Device operation has ended; open a monitor before using controls');
-          }
-        };
-        const command = async (args, timeout) => {
-          requireOperation();
-          const { stdout } = await run(cli, [...args, '--device', device], {
-            timeout,
-            maxBuffer: 100000,
-          });
-          const response = JSON.parse(stdout);
-          if (response.status !== 'ok') {
-            throw Error(response.error || 'Device button failed');
-          }
-          return response.data;
-        };
-        const pressOnce = () => command(['io', 'button', button], 5000);
+        const pressOnce = () => command(session, owner, ['io', 'button', button], 5000);
         await pressOnce();
         if (button !== 'HOME' || session.device.platform !== 'ios') {
           return { button };
@@ -251,7 +288,7 @@ export async function createMonitorService({
         const isHome = async () => {
           for (const delay of [350, 650]) {
             await new Promise((resolve) => setTimeout(resolve, delay));
-            const foreground = await command(['apps', 'foreground'], 1500);
+            const foreground = await command(session, owner, ['apps', 'foreground'], 1500);
             if (foreground?.packageName === 'com.apple.springboard') {
               return true;
             }
@@ -268,11 +305,12 @@ export async function createMonitorService({
         return { button, homeVerified: true, presses: 2 };
       };
       // Multiple widgets may control one device. Preserve the order of button presses.
-      const result = (session.controls ?? Promise.resolve()).then(() =>
-        button === 'HOME' && session.device.platform === 'ios'
+      const result = (session.controls ?? Promise.resolve()).then(() => {
+        requireOperation(session, owner);
+        return button === 'HOME' && session.device.platform === 'ios'
           ? session.capture.withControl(press)
-          : press(),
-      );
+          : press();
+      });
       session.controls = result.catch(() => {});
       return result;
     },

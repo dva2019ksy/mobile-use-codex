@@ -114,7 +114,7 @@ server.listen(${JSON.stringify(socket)}, () => process.stdout.write('ready'));`,
     } else {
       broker = await connectBroker({ cli, runtimeDir: dir });
       assert.notEqual(broker.pid, legacy.pid);
-      assert.equal((await broker.call('health')).version, '0.1.5');
+      assert.equal((await broker.call('health')).version, '0.1.6');
     }
   });
 }
