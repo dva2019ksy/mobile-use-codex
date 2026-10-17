@@ -49,7 +49,7 @@ export async function connectBroker({
   const health = async ({ upgradeIdle = false } = {}) => {
     try {
       const value = await brokerRequest(socket, 'health');
-      if (value.version !== '0.1.4') {
+      if (value.version !== '0.1.5') {
         if (value.activeOperations !== 0) {
           throw Error('Monitor service version differs; finish operations before updating');
         }

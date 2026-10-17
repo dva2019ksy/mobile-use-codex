@@ -99,7 +99,7 @@ export async function createMonitorService({
   const methods = {
     // Broker protocol version, independent of the plugin release.
     health: async () => ({
-      version: '0.1.4',
+      version: '0.1.5',
       pid: process.pid,
       origin,
       cli,
@@ -268,7 +268,11 @@ export async function createMonitorService({
         return { button, homeVerified: true, presses: 2 };
       };
       // Multiple widgets may control one device. Preserve the order of button presses.
-      const result = (session.controls ?? Promise.resolve()).then(press);
+      const result = (session.controls ?? Promise.resolve()).then(() =>
+        button === 'HOME' && session.device.platform === 'ios'
+          ? session.capture.withControl(press)
+          : press(),
+      );
       session.controls = result.catch(() => {});
       return result;
     },

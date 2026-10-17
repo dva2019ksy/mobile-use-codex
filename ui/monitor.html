@@ -14,6 +14,7 @@
       --line: rgb(35 43 55 / 10%);
       --hover: rgb(35 43 55 / 7%);
       --accent: #227b57;
+      --display-bg: #e9ecf1;
       --shadow: 0 12px 36px rgb(30 40 60 / 10%), inset 0 1px 0 rgb(255 255 255 / 70%);
       --screen-shadow: 0 24px 64px rgb(30 40 60 / 16%), 0 2px 8px rgb(30 40 60 / 8%);
     }
@@ -27,6 +28,7 @@
         --line: rgb(255 255 255 / 10%);
         --hover: rgb(255 255 255 / 9%);
         --accent: #80d8ac;
+        --display-bg: #1c1e23;
         --shadow: 0 12px 36px rgb(0 0 0 / 22%), inset 0 1px 0 rgb(255 255 255 / 9%);
         --screen-shadow: 0 24px 64px rgb(0 0 0 / 35%), 0 2px 8px rgb(0 0 0 / 20%);
       }
@@ -54,9 +56,6 @@
         'Segoe UI',
         sans-serif;
       -webkit-font-smoothing: antialiased;
-    }
-    body[data-mode='inline'] {
-      height: 440px;
     }
     header {
       display: flex;
@@ -114,6 +113,7 @@
     }
     main {
       position: relative;
+      min-width: 0;
       min-height: 0;
       margin: 12px 24px 20px;
     }
@@ -124,16 +124,52 @@
       align-items: center;
       justify-content: center;
     }
-    #screen img {
+    #device-shell {
+      position: relative;
+      flex: none;
+      max-width: 96%;
+      max-height: 96%;
+      padding: var(--bezel, 14px);
+      border: 1px solid #696c72;
+      border-radius: 28px;
+      background: linear-gradient(135deg, #36383c, #111214 45%, #25272a);
+      box-shadow:
+        0 28px 70px rgb(0 0 0 / 28%),
+        0 4px 12px rgb(0 0 0 / 16%),
+        inset 0 0 0 1px rgb(255 255 255 / 16%),
+        inset 0 2px 2px rgb(255 255 255 / 12%);
+    }
+    .camera {
+      position: absolute;
+      top: calc(var(--bezel, 14px) / 2 - 2px);
+      left: calc(50% - 2px);
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #080a0d;
+      box-shadow:
+        inset 0 0 0 1px #323944,
+        inset 1px 1px 1px #536278;
+    }
+    #device-shell[data-orientation='landscape'] .camera {
+      top: calc(50% - 2px);
+      left: calc(var(--bezel, 14px) / 2 - 2px);
+    }
+    #display {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      border-radius: 15px;
+      background: var(--display-bg);
+      box-shadow: 0 0 0 1px rgb(0 0 0 / 65%);
+      container-type: size;
+    }
+    #display img {
       display: block;
-      width: auto;
-      height: auto;
-      max-width: 92%;
-      max-height: 94%;
+      width: 100%;
+      height: 100%;
       object-fit: contain;
-      border-radius: 14px;
-      box-shadow: var(--screen-shadow);
-      outline: 1px solid var(--line);
     }
     #placeholder {
       position: absolute;
@@ -145,32 +181,11 @@
       text-align: center;
       padding: 20px;
     }
-    .loading-device {
-      position: relative;
-      display: grid;
-      place-items: center;
-      width: 76px;
-      height: 92px;
-      border-radius: 19px;
-      border: 1px solid var(--edge);
-      background: var(--glass);
-      box-shadow: var(--shadow);
-      margin-bottom: 24px;
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-    }
-    .loading-device::after {
-      content: '';
-      position: absolute;
-      bottom: 9px;
-      width: 20px;
-      height: 3px;
-      border-radius: 3px;
-      background: var(--line);
-    }
     .spinner {
+      flex: none;
       width: 21px;
       height: 21px;
+      margin-bottom: 20px;
       border: 2px solid var(--line);
       border-top-color: var(--muted);
       border-radius: 50%;
@@ -192,6 +207,25 @@
       max-width: 280px;
       margin: 0;
       overflow-wrap: anywhere;
+    }
+    @container (max-height: 140px) {
+      #placeholder {
+        padding: 8px;
+      }
+      #placeholder-detail {
+        display: none;
+      }
+      .spinner {
+        margin-bottom: 12px;
+      }
+    }
+    @container (max-height: 80px) {
+      #placeholder-title {
+        display: none;
+      }
+      .spinner {
+        margin-bottom: 0;
+      }
     }
     body[data-state='error'] .spinner,
     body[data-state='ended'] .spinner,
@@ -377,14 +411,6 @@
       <symbol id="icon-retry" viewBox="0 0 24 24">
         <path d="M20 10a8 8 0 1 0-2 8M20 4v6h-6" />
       </symbol>
-      <symbol id="icon-collapse" viewBox="0 0 24 24">
-        <rect x="3" y="4" width="18" height="16" rx="3" />
-        <path d="M15 4v16m-5-11-3 3 3 3" />
-      </symbol>
-      <symbol id="icon-expand" viewBox="0 0 24 24">
-        <rect x="3" y="4" width="18" height="16" rx="3" />
-        <path d="M15 4v16m-8-11 3 3-3 3" />
-      </symbol>
     </svg>
     <header>
       <div class="device-icon">
@@ -400,11 +426,17 @@
       </div>
     </header>
     <main id="view" aria-label="设备实时画面" aria-busy="true">
-      <div id="screen"></div>
-      <div id="placeholder" role="status">
-        <div class="loading-device" aria-hidden="true"><div class="spinner"></div></div>
-        <p id="placeholder-title">正在连接设备</p>
-        <p id="placeholder-detail">画面就绪后将在这里显示</p>
+      <div id="screen">
+        <div id="device-shell" hidden>
+          <i class="camera" aria-hidden="true"></i>
+          <div id="display">
+            <div id="placeholder" role="status">
+              <div class="spinner" aria-hidden="true"></div>
+              <p id="placeholder-title">正在连接设备</p>
+              <p id="placeholder-detail">画面就绪后将在这里显示</p>
+            </div>
+          </div>
+        </div>
       </div>
       <div id="overlay" hidden></div>
     </main>
@@ -441,9 +473,6 @@
         <button id="toggle" title="暂停画面" aria-label="暂停画面" aria-pressed="false" disabled>
           <svg aria-hidden="true"><use href="#icon-pause" /></svg>
         </button>
-        <button id="expand" title="在侧栏打开" aria-label="在侧栏打开" disabled>
-          <svg aria-hidden="true"><use href="#icon-expand" /></svg>
-        </button>
       </div>
       <div class="meta">
         <span id="feedback" role="status"></span>
@@ -471,6 +500,57 @@
       let disposed = false;
       let controlBusy = false;
       let feedbackTimer;
+      let frameSize = [4, 3];
+      function restoreFrameSize(device) {
+        frameSize =
+          !device || /ipad|tablet/i.test(device.name + ' ' + device.model) ? [4, 3] : [9, 16];
+        try {
+          const saved = JSON.parse(localStorage.getItem('mobile-monitor.size.' + device?.id));
+          if (
+            saved?.length === 2 &&
+            saved.every((n) => Number.isFinite(n) && n > 0 && n <= 10000)
+          ) {
+            frameSize = saved;
+          }
+        } catch {
+          /* Storage is optional in sandboxed hosts. */
+        }
+      }
+      function fitDevice() {
+        if (image?.naturalWidth && image.naturalHeight) {
+          const nextSize = [image.naturalWidth, image.naturalHeight];
+          if (nextSize[0] !== frameSize[0] || nextSize[1] !== frameSize[1]) {
+            frameSize = nextSize;
+            try {
+              localStorage.setItem(
+                'mobile-monitor.size.' + config?.device.id,
+                JSON.stringify(frameSize),
+              );
+            } catch {
+              /* Reconnection still retains this instance's last frame size. */
+            }
+          }
+        }
+        const [width, height] = frameSize;
+        const area = $('#screen');
+        const bezel = Math.max(10, Math.min(18, area.clientWidth * 0.022));
+        const space = 2 * bezel + 2;
+        const scale = Math.max(
+          0,
+          Math.min(
+            (area.clientWidth * 0.96 - space) / width,
+            (area.clientHeight * 0.96 - space) / height,
+          ),
+        );
+        const shell = $('#device-shell');
+        shell.style.setProperty('--bezel', bezel + 'px');
+        shell.style.width = width * scale + space + 'px';
+        shell.style.height = height * scale + space + 'px';
+        shell.dataset.orientation = width > height ? 'landscape' : 'portrait';
+        shell.hidden = false;
+      }
+      const resizeObserver = new ResizeObserver(fitDevice);
+      resizeObserver.observe($('#screen'));
       function setStatus(text, state = 'loading') {
         $('#status').textContent = text;
         document.body.dataset.state = state;
@@ -488,7 +568,6 @@
       }
       function updateControls() {
         $('#toggle').disabled = !config || ended || disposed;
-        $('#expand').disabled = !bridgeReady || !config || disposed;
         document.querySelectorAll('[data-button]').forEach((button) => {
           button.disabled = !bridgeReady || !config || ended || disposed || controlBusy;
           if (window.mobileCodexStandalone) {
@@ -533,10 +612,6 @@
           return;
         }
         document.body.dataset.mode = mode;
-        const expanded = mode === 'fullscreen';
-        $('#expand use').setAttribute('href', '#icon-' + (expanded ? 'collapse' : 'expand'));
-        $('#expand').setAttribute('aria-label', expanded ? '收起侧栏' : '在侧栏打开');
-        $('#expand').title = expanded ? '收起侧栏' : '在侧栏打开';
       }
       async function displayMode(mode) {
         const response = window.openai?.requestDisplayMode
@@ -551,7 +626,7 @@
         autoExpanded = true;
         if (document.body.dataset.mode !== 'fullscreen') {
           displayMode('fullscreen').catch((error) => {
-            $('#expand').title = '自动打开侧栏失败：' + error.message;
+            feedback('无法自动打开侧栏：' + error.message);
           });
         }
       }
@@ -607,6 +682,7 @@
         clearInterval(statusTimer);
         image?.remove();
         image = null;
+        fitDevice();
         $('#overlay').hidden = true;
         $('#rate').textContent = '采集已停止';
         setStatus('已结束', 'ended');
@@ -687,8 +763,12 @@
             if (!running || generation !== current) {
               return;
             }
-            $('#screen').replaceChildren(next);
+            $('#display').append(next);
+            if (image !== next) {
+              image?.remove();
+            }
             image = next;
+            fitDevice();
             $('#placeholder').hidden = true;
             $('#overlay').hidden = true;
             $('#view').setAttribute('aria-busy', 'false');
@@ -724,8 +804,12 @@
             if (!running || generation !== current) {
               return;
             }
-            $('#screen').replaceChildren(next);
+            $('#display').append(next);
+            if (image !== next) {
+              image?.remove();
+            }
             image = next;
+            fitDevice();
             $('#placeholder').hidden = true;
             $('#view').setAttribute('aria-busy', 'false');
             setStatus('实时', 'live');
@@ -746,6 +830,8 @@
         image?.remove();
         image = null;
         config = next;
+        restoreFrameSize(config.device);
+        fitDevice();
         ended = false;
         clearInterval(statusTimer);
         statusTimer = setInterval(checkStatus, 1000);
@@ -805,6 +891,7 @@
       let statusTimer = null;
       function teardown() {
         disposed = true;
+        resizeObserver.disconnect();
         stopViewing();
         clearInterval(statusTimer);
         clearTimeout(feedbackTimer);
@@ -860,10 +947,6 @@
           start();
         }
       };
-      $('#expand').onclick = () =>
-        displayMode(document.body.dataset.mode === 'fullscreen' ? 'inline' : 'fullscreen').catch(
-          (error) => feedback('无法切换侧栏：' + error.message),
-        );
       document.querySelectorAll('[data-button]').forEach((button) => {
         button.onclick = async () => {
           if (controlBusy || ended || !config) {

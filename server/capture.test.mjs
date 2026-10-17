@@ -4,6 +4,53 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { Capture, JpegParser } from './capture.mjs';
 
+for (const finishDuringControl of [false, true]) {
+  test(`Home can suspend screenshots without losing viewers; operation ends during control: ${finishDuringControl}`, async () => {
+    const children = [];
+    const capture = new Capture({
+      cli: 'test',
+      device: 'ipad',
+      fps: 30,
+      scale: 0.5,
+      spawnProcess: () => {
+        const child = new EventEmitter();
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.exitCode = null;
+        child.kill = () => {
+          child.exitCode = 0;
+          queueMicrotask(() => child.emit('close', 0));
+          return true;
+        };
+        children.push(child);
+        return child;
+      },
+    });
+    await capture.readFrame('widget', 0, 0);
+    assert.equal(children.length, 1);
+    await assert.rejects(
+      capture.withControl(async () => {
+        assert.equal(capture.child, null);
+        await capture.readFrame('widget', 0, 0);
+        assert.equal(children.length, 1);
+        assert.equal(capture.status().viewers, 1);
+        if (finishDuringControl) {
+          await capture.setCaptureEnabled(false);
+        }
+        throw Error('Home failed');
+      }),
+      /Home failed/,
+    );
+    assert.equal(children.length, finishDuringControl ? 1 : 2);
+    if (!finishDuringControl) {
+      children[1].stdout.write(Buffer.from([255, 216, 1, 255, 217]));
+      assert.equal(capture.status().frames, 1);
+      assert.equal(capture.status().state, 'streaming');
+    }
+    await capture.close();
+  });
+}
+
 test('finds JPEG frames when markers and multipart headers cross transport chunks', () => {
   const parser = new JpegParser();
   const first = Buffer.from([0xff, 0xd8, 1, 2, 0xff, 0xd9]);

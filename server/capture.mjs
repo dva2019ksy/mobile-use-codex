@@ -43,6 +43,7 @@ export class Capture {
   frameViewers = new Map();
   stopping = null;
   captureEnabled = true;
+  controlDepth = 0;
   constructor({
     cli,
     device,
@@ -132,7 +133,13 @@ export class Capture {
   }
 
   startCapture() {
-    if (this.child || this.stopped || !this.captureEnabled || !this.clients.size) {
+    if (
+      this.child ||
+      this.stopped ||
+      !this.captureEnabled ||
+      this.controlDepth ||
+      !this.clients.size
+    ) {
       return;
     }
     this.arrivals = [];
@@ -310,6 +317,20 @@ export class Capture {
       return Promise.resolve();
     }
     return this.stopCapture();
+  }
+
+  async withControl(action) {
+    // XCTest screenshots and Home both use the device's main actor. Let the
+    // current screenshot stream stop before controlling the device, and keep
+    // viewers attached so the next frame resumes without a reconnect.
+    this.controlDepth++;
+    try {
+      await this.stopCapture();
+      return await action();
+    } finally {
+      this.controlDepth--;
+      this.startCapture();
+    }
   }
 
   close() {

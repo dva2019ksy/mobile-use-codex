@@ -1,0 +1,89 @@
+diff --git a/DeviceKitTests/Streamer/MJPEG/MJPEGImageScaler.swift b/DeviceKitTests/Streamer/MJPEG/MJPEGImageScaler.swift
+index 575ee00..2e29171 100644
+--- a/DeviceKitTests/Streamer/MJPEG/MJPEGImageScaler.swift
++++ b/DeviceKitTests/Streamer/MJPEG/MJPEGImageScaler.swift
+@@ -1,57 +1,44 @@
++import CoreGraphics
++import Foundation
++import ImageIO
+ import UniformTypeIdentifiers
+ 
+ final class MJPEGImageScaler {
+     func scaleJPEG(_ data: Data, scaleFactor: CGFloat, quality: CGFloat) -> Data? {
+-        guard let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
+-              let cgImage = CGImageSourceCreateImageAtIndex(imageSource, 0, nil) else {
++        guard scaleFactor > 0,
++              let source = CGImageSourceCreateWithData(data as CFData, nil),
++              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
++              let width = properties[kCGImagePropertyPixelWidth] as? Int,
++              let height = properties[kCGImagePropertyPixelHeight] as? Int else {
+             return nil
+         }
+ 
+-        let originalWidth = CGFloat(cgImage.width)
+-        let originalHeight = CGFloat(cgImage.height)
+-        let newWidth = Int(originalWidth * scaleFactor)
+-        let newHeight = Int(originalHeight * scaleFactor)
+-
+-        guard newWidth > 0 && newHeight > 0 else {
++        // XCTest JPEGs can carry portrait pixels and a landscape EXIF orientation.
++        // Apply that orientation while scaling, then encode upright pixels. Drawing
++        // a raw CGImage discarded the tag and turned landscape streams sideways.
++        let options: [CFString: Any] = [
++            kCGImageSourceCreateThumbnailFromImageAlways: true,
++            kCGImageSourceCreateThumbnailWithTransform: true,
++            kCGImageSourceThumbnailMaxPixelSize: max(1, Int(CGFloat(max(width, height)) * scaleFactor)),
++            kCGImageSourceShouldCacheImmediately: true
++        ]
++        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+             return nil
+         }
+ 
+-        guard let context = CGContext(
+-            data: nil,
+-            width: newWidth,
+-            height: newHeight,
+-            bitsPerComponent: 8,
+-            bytesPerRow: 0,
+-            space: CGColorSpaceCreateDeviceRGB(),
+-            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
++        let result = NSMutableData()
++        guard let destination = CGImageDestinationCreateWithData(
++            result as CFMutableData, UTType.jpeg.identifier as CFString, 1, nil
+         ) else {
+             return nil
+         }
+-
+-        context.interpolationQuality = .medium
+-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: newWidth, height: newHeight))
+-
+-        guard let scaledCGImage = context.makeImage() else {
+-            return nil
+-        }
+-
+-        let mutableData = NSMutableData()
+-        guard let destination = CGImageDestinationCreateWithData(
+-            mutableData as CFMutableData,
+-            UTType.jpeg.identifier as CFString,
+-            1,
+-            nil
+-        ) else {
++        CGImageDestinationAddImage(destination, image, [
++            kCGImageDestinationLossyCompressionQuality: quality,
++            kCGImagePropertyOrientation: 1
++        ] as CFDictionary)
++        guard CGImageDestinationFinalize(destination) else {
+             return nil
+         }
+-
+-        let options: [CFString: Any] = [
+-            kCGImageDestinationLossyCompressionQuality: quality
+-        ]
+-        CGImageDestinationAddImage(destination, scaledCGImage, options as CFDictionary)
+-        CGImageDestinationFinalize(destination)
+-
+-        return mutableData as Data
++        return result as Data
+     }
+ }
+-
